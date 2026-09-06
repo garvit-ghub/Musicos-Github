@@ -1,18 +1,23 @@
 const nodemailer = require('nodemailer');
 
-const sendEmail = async (to, subject, text, html) => {
-    const transporter = nodemailer.createTransport({
-        service: 'Gmail',
-        auth: {
-            user: process.env.EMAIL_USER,
-            pass: process.env.EMAIL_PASS,
-        },
-        tls: {
-            rejectUnauthorized: false,
-        },
-    });
+const transporter = nodemailer.createTransport({
+    service: 'Gmail',
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+    tls: {
+        rejectUnauthorized: false,
+    },
+});
 
-    await transporter.verify();
+let verified = false;
+
+const sendEmail = async (to, subject, text, html) => {
+    if (!verified) {
+        await transporter.verify();
+        verified = true;
+    }
 
     const mailOptions = {
         from: process.env.EMAIL_USER,

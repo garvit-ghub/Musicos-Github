@@ -29,6 +29,8 @@ const createOrder = async (req, res) => {
 
         await newOrder.save();
 
+        res.status(201).json(newOrder);
+
         try {
             const confirmEmail = orderConfirmationEmail(
                 req.user.name,
@@ -36,12 +38,12 @@ const createOrder = async (req, res) => {
                 items,
                 totalAmount
             );
-            await sendEmail(
+            sendEmail(
                 req.user.email,
                 confirmEmail.subject,
                 confirmEmail.text,
                 confirmEmail.html
-            );
+            ).catch((e) => console.error('Confirmation email failed:', e.message));
         } catch (emailError) {
             console.error('Confirmation email failed:', emailError.message);
         }
@@ -54,17 +56,15 @@ const createOrder = async (req, res) => {
                 totalAmount,
                 COURSE_DOWNLOAD_URL
             );
-            await sendEmail(
+            sendEmail(
                 req.user.email,
                 deliveredEmail.subject,
                 deliveredEmail.text,
                 deliveredEmail.html
-            );
+            ).catch((e) => console.error('Course delivery email failed:', e.message));
         } catch (emailError) {
             console.error('Course delivery email failed:', emailError.message);
         }
-
-        res.status(201).json(newOrder);
     } catch (error) {
         console.error('Create order error:', error.message);
         res.status(500).json({ message: error.message || 'Server error : Cannot create order' });
