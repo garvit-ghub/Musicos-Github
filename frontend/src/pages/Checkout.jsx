@@ -86,32 +86,40 @@ const Checkout = () => {
         name: 'Musicos',
         description: 'Order Payment',
         order_id: order.id,
-        handler: async (response) => {
-          try {
-            await fetch('/api/payments/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(response)
-            });
-
-            const saveRes = await saveOrder(response.razorpay_order_id);
-            if (saveRes.ok) {
-              dispatch(clearCart());
-              alert('Payment successful! Order placed.');
-              navigate('/ordersuccess');
-            } else {
-              const data = await saveRes.json();
-              if (saveRes.status === 401) {
-                alert('Session expired. Please log in again.');
-                navigate('/login');
+        handler: (response) => {
+          fetch('/api/payments/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(response)
+          })
+            .then((verifyRes) => {
+              if (!verifyRes.ok) throw new Error('Payment verification failed');
+              return saveOrder(response.razorpay_order_id);
+            })
+            .then((saveRes) => {
+              if (saveRes.ok) {
+                dispatch(clearCart());
+                alert('Payment successful! Order placed.');
+                navigate('/ordersuccess');
               } else {
-                alert(data.message || 'Failed to save order');
+                return saveRes.json().then((data) => {
+                  dispatch(clearCart());
+                  if (saveRes.status === 401) {
+                    alert('Session expired. Please log in again.');
+                    navigate('/login');
+                  } else {
+                    alert('Payment received but order saving failed: ' + (data.message || 'Unknown error') + '. Contact support.');
+                    navigate('/ordersuccess');
+                  }
+                });
               }
-            }
-          } catch (err) {
-            console.error(err);
-            alert('Payment was made but order saving failed. Contact support.');
-          }
+            })
+            .catch((err) => {
+              console.error(err);
+              dispatch(clearCart());
+              alert('Payment was made but something went wrong. Contact support.');
+              navigate('/ordersuccess');
+            });
         },
         prefill: {
           name: user?.name || '',
