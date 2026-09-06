@@ -30,8 +30,12 @@ const orderschema = mongoose.Schema(
         },
         status: {
             type: String,
-            enum: ['Pending', 'Shipped', 'Delivered'],
+            enum: ['Pending', 'Delivered'],
             default: 'Pending',
+        },
+        downloadUrl: {
+            type: String,
+            default: null,
         },
     }, {timestamps: true}
 );

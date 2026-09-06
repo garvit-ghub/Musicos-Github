@@ -1,5 +1,11 @@
 const Order = require('../model/Order');
 const sendEmail = require('../utils/sendEmail');
+const {
+    orderConfirmationEmail,
+    orderDeliveredEmail,
+} = require('../utils/emailTemplates');
+
+const COURSE_DOWNLOAD_URL = 'https://youtu.be/dQw4w9WgXcQ';
 
 const createOrder = async (req, res) => {
     try {
@@ -17,19 +23,47 @@ const createOrder = async (req, res) => {
             totalAmount,
             address,
             paymentId,
+            status: 'Delivered',
+            downloadUrl: COURSE_DOWNLOAD_URL,
         });
 
         await newOrder.save();
+
         try {
-            console.log('Sending email to:', req.user.email, 'Name:', req.user.name);
+            const confirmEmail = orderConfirmationEmail(
+                req.user.name,
+                newOrder._id,
+                items,
+                totalAmount
+            );
             await sendEmail(
                 req.user.email,
-                'Order Confirmation',
-                `Hello ${req.user.name}, your order has been placed successfully! Thank you for shopping with us. Your order ID is ${newOrder._id}.`
+                confirmEmail.subject,
+                confirmEmail.text,
+                confirmEmail.html
             );
         } catch (emailError) {
-            console.error('Email sending failed:', emailError.message);
+            console.error('Confirmation email failed:', emailError.message);
         }
+
+        try {
+            const deliveredEmail = orderDeliveredEmail(
+                req.user.name,
+                newOrder._id,
+                items,
+                totalAmount,
+                COURSE_DOWNLOAD_URL
+            );
+            await sendEmail(
+                req.user.email,
+                deliveredEmail.subject,
+                deliveredEmail.text,
+                deliveredEmail.html
+            );
+        } catch (emailError) {
+            console.error('Course delivery email failed:', emailError.message);
+        }
+
         res.status(201).json(newOrder);
     } catch (error) {
         console.error('Create order error:', error.message);
@@ -57,18 +91,44 @@ const getOrders = async (req, res) => {
 
 const updateOrderStatus = async (req, res) => {
     try {
-        const { status } = req.body;
-        const order = await Order.findById(req.params.id);
+        const { status, downloadUrl } = req.body;
+        const order = await Order.findById(req.params.id).populate('user', 'name email');
 
         if (!order) {
             return res.status(404).json({ message: 'Order not found' });
         }
 
         order.status = status;
+        if (downloadUrl) {
+            order.downloadUrl = downloadUrl;
+        }
         await order.save();
+
+        if (order.user && status === 'Delivered') {
+            try {
+                const emailContent = orderDeliveredEmail(
+                    order.user.name,
+                    order._id,
+                    order.items,
+                    order.totalAmount,
+                    order.downloadUrl
+                );
+
+                await sendEmail(
+                    order.user.email,
+                    emailContent.subject,
+                    emailContent.text,
+                    emailContent.html
+                );
+            } catch (emailError) {
+                console.error('Delivery email failed:', emailError.message);
+            }
+        }
+
         res.json({ message: 'Order status updated successfully', order });
     } catch (error) {
         res.status(500).json({ message: 'Server error : Cannot update order status' });
     }
 };
+
 module.exports = { createOrder, myOrders, getOrders, updateOrderStatus };

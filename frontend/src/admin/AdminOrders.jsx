@@ -5,6 +5,7 @@ const AdminOrders = () => {
   const { user } = useContext(AuthContext);
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [downloadInputs, setDownloadInputs] = useState({});
 
   const fetchOrders = useCallback(async () => {
     try {
@@ -28,14 +29,26 @@ const AdminOrders = () => {
   }, [fetchOrders]);
 
   const updateStatus = async (id, status) => {
+    if (status === 'Delivered' && !downloadInputs[id]?.trim()) {
+      alert('Please enter a download URL before marking as Delivered.');
+      return;
+    }
     try {
+      const body = { status };
+      if (status === 'Delivered' && downloadInputs[id]?.trim()) {
+        body.downloadUrl = downloadInputs[id].trim();
+      }
       const res = await fetch(`/api/orders/${id}/status`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${user.token}` },
-        body: JSON.stringify({ status })
+        body: JSON.stringify(body)
       });
       if (res.ok) {
-        setOrders(orders.map(order => order._id === id ? { ...order, status } : order));
+        const data = await res.json();
+        setOrders(orders.map(order => order._id === id ? data.order : order));
+        if (status === 'Delivered') {
+          setDownloadInputs((prev) => ({ ...prev, [id]: '' }));
+        }
       }
     } catch (error) {
       console.error(error);
@@ -62,6 +75,7 @@ const AdminOrders = () => {
                 <th style={thStyle}>TOTAL</th>
                 <th style={thStyle}>DATE</th>
                 <th style={thStyle}>STATUS</th>
+                <th style={thStyle}>ACTION</th>
               </tr>
             </thead>
             <tbody>
@@ -72,15 +86,42 @@ const AdminOrders = () => {
                   <td style={tdStyle}>₹{(order.totalAmount ?? 0).toFixed(2)}</td>
                   <td style={tdStyle}>{new Date(order.createdAt).toLocaleDateString()}</td>
                   <td style={tdStyle}>
-                    <select 
-                      value={order.status} 
-                      onChange={(e) => updateStatus(order._id, e.target.value)}
-                      style={{ background: '#09090b', color: '#fff', padding: '6px', border: '1px solid #27272a', borderRadius: '4px', outline: 'none' }}
-                    >
-                      <option value="Pending">Pending</option>
-                      <option value="Shipped">Shipped</option>
-                      <option value="Delivered">Delivered</option>
-                    </select>
+                    <span style={{
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      background: order.status === 'Delivered' ? 'rgba(16,185,129,0.15)' : 'rgba(249,115,22,0.15)',
+                      color: order.status === 'Delivered' ? '#10b981' : '#f97316',
+                    }}>
+                      {order.status}
+                    </span>
+                  </td>
+                  <td style={tdStyle}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                      <select
+                        value={order.status}
+                        onChange={(e) => updateStatus(order._id, e.target.value)}
+                        style={{ background: '#09090b', color: '#fff', padding: '6px', border: '1px solid #27272a', borderRadius: '4px', outline: 'none' }}
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Delivered">Delivered</option>
+                      </select>
+                      {order.status !== 'Delivered' && (
+                        <input
+                          type="text"
+                          placeholder="Download URL (for Delivered)"
+                          value={downloadInputs[order._id] || ''}
+                          onChange={(e) => setDownloadInputs({ ...downloadInputs, [order._id]: e.target.value })}
+                          style={{ background: '#09090b', color: '#fff', padding: '6px', border: '1px solid #27272a', borderRadius: '4px', outline: 'none', fontSize: '12px', width: '200px' }}
+                        />
+                      )}
+                      {order.status === 'Delivered' && order.downloadUrl && (
+                        <a href={order.downloadUrl} target="_blank" rel="noreferrer" style={{ fontSize: '11px', color: '#10b981', wordBreak: 'break-all' }}>
+                          {order.downloadUrl.substring(0, 40)}...
+                        </a>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}
